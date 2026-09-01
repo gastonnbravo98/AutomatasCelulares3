@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autómatas Celulares — Demo Interactiva</title>
+<style>
+  /* ==========================================================================
+     PALETA DE COLORES (variables CSS)
+     Basada en tonos oscuros tipo "GitHub Dark" para que se vea prolijo
+     y se lea bien proyectado.
+     ========================================================================== */
+  :root{
+    --bg:            #0d1117;   /* fondo general de la página */
+    --bg-elev:       #161b22;   /* paneles, header, tarjetas */
+    --bg-overlay:    #21262d;   /* celdas muertas, botones normales */
+    --border:        #30363d;   /* bordes y separadores */
+    --text:          #c9d1d9;   /* texto principal */
+    --text-muted:    #8b949e;   /* texto secundario */
+    --accent:        #58a6ff;   /* color de acento pedido (UI, foco, centro del kernel) */
+    --accent-dim:    rgba(88,166,255,0.18);
+    --success:       #3fb950;   /* verde: significa "celda viva" en todas las demos */
+    --warning:       #f0883e;   /* naranja: "próxima generación" / "vecino contado" */
+    --warning-dim:   rgba(240,136,62,0.30);
+    --danger:        #f85149;   /* rojo: acciones destructivas (limpiar) */
+  }
+
+  *{ box-sizing:border-box; }
+
+  html, body{
+    margin:0; padding:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height:100vh;
+  }
+
+  /* ---------------------------- HEADER Y TABS ---------------------------- */
+  .app-header{
+    position:sticky; top:0; z-index:10;
+    background:var(--bg-elev);
+    border-bottom:1px solid var(--border);
+    padding:16px 24px 0 24px;
+  }
+  .app-header h1{
+    margin:0 0 12px 0;
+    font-size:1.4rem;
+    color:var(--text);
+  }
+  .app-header h1 .subtitle{
+    color:var(--text-muted);
+    font-weight:400;
+    font-size:1rem;
+    margin-left:8px;
+  }
+  .tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tab-btn{
+    background:transparent;
+    border:none;
+    border-bottom:3px solid transparent;
+    color:var(--text-muted);
+    padding:14px 20px;
+    font-size:1.05rem;
+    font-weight:600;
+    border-radius:8px 8px 0 0;
+    cursor:pointer;
+    transition:.15s;
+  }
+  .tab-btn:hover{ color:var(--text); background:var(--bg-overlay); }
+  .tab-btn.active{
+    color:var(--accent);
+    border-bottom-color:var(--accent);
+    background:var(--bg-overlay);
+  }
+
+  /* ------------------------------ CONTENIDO ------------------------------ */
+  main{ padding:24px; max-width:1400px; margin:0 auto; }
+
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; animation:aparecer .2s ease; }
+  @keyframes aparecer{ from{opacity:0;} to{opacity:1;} }
+
+  .panel-grid{
+    display:grid;
+    grid-template-columns: 330px 1fr;
+    gap:24px;
+    align-items:start;
+  }
+  @media (max-width: 900px){
+    .panel-grid{ grid-template-columns: 1fr; }
+  }
+
+  .info-box{
+    background:var(--bg-elev);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:20px;
+    line-height:1.55;
+  }
+  .info-box h2{ margin-top:0; font-size:1.15rem; color:var(--text); }
+  .info-box p{ font-size:.95rem; }
+  .rule-box{
+    background:var(--bg-overlay);
+    border-left:4px solid var(--accent);
+    padding:10px 14px;
+    border-radius:6px;
+    margin:14px 0;
+    font-size:.9rem;
+  }
+  .rules-list{ font-size:.9rem; padding-left:20px; }
+  .rules-list li{ margin-bottom:8px; }
+  .hint{ color:var(--text-muted); font-size:.85rem; font-style:italic; }
+  .legend{ display:flex; flex-direction:column; gap:6px; margin:12px 0; font-size:.85rem; }
+  .legend .dot{
+    display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:8px; vertical-align:middle;
+  }
+  .dot-verde{ background:var(--success); }
+  .dot-naranja{ background:var(--warning); }
+  .dot-azul{ background:var(--accent); }
+
+  /* ------------------------------- STAGE ---------------------------------- */
+  .stage{ display:flex; flex-direction:column; gap:20px; align-items:center; }
+  .grids-row{ display:flex; align-items:center; gap:20px; flex-wrap:wrap; justify-content:center; }
+  .grid-block{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .grid-label{ font-size:1rem; color:var(--text-muted); margin:0; display:flex; gap:8px; align-items:baseline; }
+  .grid-label .tag{ font-size:.8rem; background:var(--bg-overlay); padding:2px 8px; border-radius:10px; }
+  .current-label{ color:var(--accent); }
+  .next-label{ color:var(--warning); }
+  .arrow{ font-size:2rem; color:var(--text-muted); }
+
+  /* ------------------------------ GRILLAS --------------------------------- */
+  .cell-grid{
+    display:inline-grid;
+    grid-template-columns: repeat(var(--cols), var(--cell-size));
+    grid-auto-rows: var(--cell-size);
+    gap:3px;
+    background:var(--border);
+    padding:3px;
+    border-radius:8px;
+    box-shadow:0 6px 18px rgba(0,0,0,.45);
+    user-select:none;
+  }
+  .cell{
+    background:var(--bg-overlay);
+    border-radius:3px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:.65rem;
+    color:var(--text-muted);
+    transition: background .12s, box-shadow .12s, outline .12s;
+  }
+  .cell:hover{ box-shadow:inset 0 0 0 2px var(--text-muted); }
+
+  /* celda viva (verde = "viva" en todas las demos) */
+  .cell.alive{ background:var(--success); box-shadow:0 0 8px rgba(63,185,80,.65); color:#04140a; }
+
+  /* celda viva en la grilla de "próxima generación" (autómata celular, tab 1) */
+  .cell.next-alive{ background:var(--warning); box-shadow:0 0 8px rgba(240,136,62,.65); color:#2b1200; }
+
+  /* resaltado del KERNEL (tab 2: convolución) */
+  .cell.kernel-center{ outline:3px solid var(--accent); outline-offset:-3px; z-index:2; }
+  .cell.kernel-neighbor{ box-shadow: inset 0 0 0 3px var(--warning); background:var(--warning-dim); }
+  .cell.kernel-neighbor.alive{ background:var(--success); box-shadow: inset 0 0 0 3px var(--warning), 0 0 8px rgba(63,185,80,.65); }
+  .cell.kernel-neighbor-wrapped{ outline:2px dashed var(--warning); outline-offset:-2px; }
+
+  /* celdas del mapa de resultados de la convolución */
+  .cell.result-cell{ cursor:default; font-weight:700; font-size:.75rem; color:var(--text); }
+  .cell.result-cell:hover{ box-shadow:none; }
+
+  /* ------------------------------ CONTROLES ------------------------------- */
+  .controls-bar{
+    display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:center;
+    background:var(--bg-elev); border:1px solid var(--border); border-radius:12px;
+    padding:16px; width:100%; box-sizing:border-box;
+  }
+  .btn{
+    background:var(--bg-overlay); color:var(--text); border:1px solid var(--border);
+    padding:13px 20px; font-size:1rem; font-weight:600; border-radius:8px;
+    cursor:pointer; transition:.15s;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; }
+  .btn:disabled:hover{ border-color:var(--border); color:var(--text); }
+  .btn-accent{ background:var(--accent); color:#04101f; border-color:var(--accent); }
+  .btn-accent:hover{ filter:brightness(1.12); color:#04101f; }
+  .btn-primary{ background:var(--success); color:#04140a; border-color:var(--success); }
+  .btn-primary:hover{ filter:brightness(1.12); color:#04140a; }
+  .btn-danger{ background:transparent; color:var(--danger); border-color:var(--danger); }
+  .btn-danger:hover{ background:var(--danger); color:#200; color:#1a0505; }
+  .full-width{ width:100%; }
+
+  .speed-label{ display:flex; flex-direction:column; font-size:.8rem; color:var(--text-muted); gap:4px; }
+  input[type=range]{ accent-color:var(--accent); width:150px; }
+  .checkbox-label{ display:flex; align-items:center; gap:8px; font-size:.9rem; margin:14px 0; cursor:pointer; }
+  .checkbox-label input{ width:18px; height:18px; accent-color:var(--accent); cursor:pointer; }
+
+  .pattern-buttons{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .pattern-btn{ padding:10px 14px; font-size:.9rem; }
+  .pattern-btn.active{ outline:3px solid var(--accent); outline-offset:1px; }
+
+  .stats-row{ display:flex; gap:20px; font-size:.95rem; margin-top:10px; }
+  .stats-row strong{ color:var(--accent); }
+
+  .counter-box{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--bg-overlay); border:1px solid var(--border); border-radius:8px;
+    padding:12px 16px; margin:14px 0;
+  }
+  .counter-label{ font-size:.9rem; color:var(--text-muted); }
+  .counter-value{ font-size:1.8rem; font-weight:800; color:var(--warning); }
+
+  /* diagrama estático del kernel 3x3 (tab 2) */
+  .kernel-diagram{ display:flex; flex-direction:column; gap:4px; width:fit-content; margin:14px auto; }
+  .k-row{ display:flex; gap:4px; }
+  .k-cell{
+    width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+    background:var(--bg-overlay); border:1px solid var(--border); border-radius:5px;
+    font-weight:700; font-size:1rem;
+  }
+  .k-cell.k-center{ background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+
+  footer{ text-align:center; color:var(--text-muted); font-size:.8rem; padding:30px 0 10px 0; }
+  code{ background:var(--bg-overlay); padding:2px 6px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+  <!-- ============================================================
+       ENCABEZADO Y NAVEGACIÓN POR PESTAÑAS
+       ============================================================ -->
+  <header class="app-header">
+    <h1>Autómatas Celulares <span class="subtitle">— de la idea general a Conway</span></h1>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="automata">1 · Autómata Celular</button>
+      <button class="tab-btn" data-tab="convolucion">2 · Convolución con Kernel</button>
+      <button class="tab-btn" data-tab="vida">3 · Juego de la Vida</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <!-- ============================================================
+         TAB 1: QUÉ ES UN AUTÓMATA CELULAR
+         ============================================================ -->
+    <section id="panel-automata" class="tab-panel active">
+      <div class="panel-grid">
+        <aside class="info-box">
+          <h2>¿Qué es un autómata celular?</h2>
+          <p>Es una grilla de celdas donde cada una tiene un estado (viva o muerta). En cada paso, <strong>todas las celdas cambian al mismo tiempo</strong> siguiendo una <strong>regla local</strong>: cada celda sólo mira el estado de sus 8 vecinas para decidir su próximo estado.</p>
+          <div class="rule-box">
+            <strong>Regla usada en esta demo — "Mayoría":</strong><br>
+            Se cuenta la celda misma + sus 8 vecinas (9 celdas en total). Si <strong>5 o más</strong> están vivas, la celda vive en la próxima generación. Si no, muere.
+          </div>
+          <div class="legend">
+            <span><span class="dot dot-verde"></span>Celda viva (generación actual)</span>
+            <span><span class="dot dot-naranja"></span>Celda viva (próxima generación)</span>
+          </div>
+          <p class="hint">Hacé click sobre las celdas de "Generación actual" para dibujar un patrón inicial. Después usá los botones de abajo.</p>
+        </aside>
+
+        <div class="stage">
+          <div class="grids-row">
+            <div class="grid-block">
+              <h3 class="grid-label current-label">Generación actual <span class="tag" id="gen-actual-num">Gen. 0</span></h3>
+              <div id="grid-actual" class="cell-grid"></div>
+            </div>
+            <div class="arrow">➜</div>
+            <div class="grid-block">
+              <h3 class="grid-label next-label">Generación siguiente</h3>
+              <div id="grid-siguiente" class="cell-grid"></div>
+            </div>
+          </div>
+
+          <div class="controls-bar">
+            <button id="btn-calc-next" class="btn btn-accent">Calcular siguiente ▶</button>
+            <button id="btn-advance" class="btn btn-primary" disabled>Avanzar generación →</button>
+            <button id="btn-play-auto" class="btn">Reproducir ⏵</button>
+            <button id="btn-random-auto" class="btn">Aleatorizar 🎲</button>
+            <button id="btn-clear-auto" class="btn btn-danger">Limpiar 🗑</button>
+            <label class="speed-label">Velocidad
+              <input type="range" id="speed-auto" min="150" max="1500" step="50" value="600">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         TAB 2: CONVOLUCIÓN CON KERNEL 3x3
+         ============================================================ -->
+    <section id="panel-convolucion" class="tab-panel">
+      <div class="panel-grid">
+        <aside class="info-box">
+          <h2>Convolución con un kernel 3×3</h2>
+          <p>Para contar vecinos vivos "deslizamos" una ventanita de 3×3 (el <strong>kernel</strong>) sobre la grilla, celda por celda. El centro del kernel vale <strong>0</strong> (no nos contamos a nosotros mismos) y las 8 posiciones de alrededor valen <strong>1</strong>.</p>
+
+          <div class="kernel-diagram">
+            <div class="k-row"><div class="k-cell">1</div><div class="k-cell">1</div><div class="k-cell">1</div></div>
+            <div class="k-row"><div class="k-cell">1</div><div class="k-cell k-center">0</div><div class="k-cell">1</div></div>
+            <div class="k-row"><div class="k-cell">1</div><div class="k-cell">1</div><div class="k-cell">1</div></div>
+          </div>
+
+          <div class="counter-box">
+            <span class="counter-label">Vecinos vivos sumados:</span>
+            <span id="conv-counter" class="counter-value">0</span>
+          </div>
+
+          <button id="btn-toggle-toroidal" class="btn btn-accent full-width">Modo: Normal (bordes vacíos)</button>
+          <p class="hint" id="conv-border-hint">Las celdas fuera de la grilla valen 0 y no se cuentan. Probá esto en una esquina y compará con el modo toroidal.</p>
+
+          <div class="legend">
+            <span><span class="dot dot-azul"></span>Centro del kernel (celda evaluada, vale 0)</span>
+            <span><span class="dot dot-naranja"></span>Vecino sumado por el kernel</span>
+            <span><span class="dot dot-verde"></span>Celda viva</span>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <div class="grids-row">
+            <div class="grid-block">
+              <h3 class="grid-label">Grilla de entrada <span class="tag" id="conv-pos-label">(fila 1, col 1)</span></h3>
+              <div id="grid-conv" class="cell-grid"></div>
+            </div>
+            <div class="arrow">➜</div>
+            <div class="grid-block">
+              <h3 class="grid-label">Mapa de resultados (conteo 0–8)</h3>
+              <div id="grid-resultado" class="cell-grid"></div>
+            </div>
+          </div>
+
+          <div class="controls-bar">
+            <button id="btn-conv-step" class="btn btn-accent">Paso siguiente ▶</button>
+            <button id="btn-conv-play" class="btn">Reproducir ⏵</button>
+            <button id="btn-conv-reset" class="btn">Reiniciar recorrido ⟲</button>
+            <button id="btn-conv-random" class="btn">Aleatorizar 🎲</button>
+            <button id="btn-conv-clear" class="btn btn-danger">Limpiar 🗑</button>
+            <label class="speed-label">Velocidad
+              <input type="range" id="speed-conv" min="80" max="1200" step="40" value="350">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         TAB 3: JUEGO DE LA VIDA DE CONWAY
+         ============================================================ -->
+    <section id="panel-vida" class="tab-panel">
+      <div class="panel-grid">
+        <aside class="info-box">
+          <h2>Juego de la Vida (Conway)</h2>
+          <p>Usa exactamente el mismo conteo de vecinos que vimos en la Convolución, pero aplicado con sólo <strong>3 reglas</strong>:</p>
+          <ul class="rules-list">
+            <li><strong>Nace:</strong> una celda muerta con exactamente <strong>3</strong> vecinas vivas, nace.</li>
+            <li><strong>Sobrevive:</strong> una celda viva con <strong>2 o 3</strong> vecinas vivas, sigue viva.</li>
+            <li><strong>Muere:</strong> en cualquier otro caso (soledad o sobrepoblación).</li>
+          </ul>
+          <p class="hint">Dibujá con click + arrastre. O elegí un patrón de la lista y hacé click en la grilla para insertarlo.</p>
+
+          <div class="pattern-buttons">
+            <button class="btn pattern-btn active" data-pattern="draw">✏ Dibujo libre</button>
+            <button class="btn pattern-btn" data-pattern="glider">Glider</button>
+            <button class="btn pattern-btn" data-pattern="blinker">Parpadeante</button>
+            <button class="btn pattern-btn" data-pattern="toad">Sapo</button>
+            <button class="btn pattern-btn" data-pattern="beacon">Faro</button>
+          </div>
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-toroidal-vida" checked>
+            Bordes toroidales (conectados)
+          </label>
+
+          <div class="stats-row">
+            <span>Generación: <strong id="vida-gen">0</strong></span>
+            <span>Población: <strong id="vida-pop">0</strong></span>
+          </div>
+        </aside>
+
+        <div class="stage">
+          <div id="grid-vida" class="cell-grid"></div>
+
+          <div class="controls-bar">
+            <button id="btn-vida-play" class="btn btn-accent">Reproducir ⏵</button>
+            <button id="btn-vida-step" class="btn">Paso a paso ▶|</button>
+            <button id="btn-vida-random" class="btn">Aleatorizar 🎲</button>
+            <button id="btn-vida-clear" class="btn btn-danger">Limpiar 🗑</button>
+            <label class="speed-label">Velocidad
+              <input type="range" id="speed-vida" min="40" max="800" step="20" value="150">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    Demo autocontenida — sin conexión a internet. Podés abrir este .html con un editor de texto para mostrar el código comentado (en español).
+  </footer>
+
+<script>
+/* ============================================================================
+   ARCHIVO ÚNICO — TODA LA LÓGICA JS DE LAS 3 DEMOS
+   Organizado en 4 bloques:
+     0. Utilidades generales (compartidas por las 3 pestañas)
+     1. Tab 1 — Autómata celular genérico (regla de mayoría)
+     2. Tab 2 — Convolución con kernel 3x3
+     3. Tab 3 — Juego de la vida de Conway
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   0. UTILIDADES GENERALES
+   ---------------------------------------------------------------------------- */
+
+// Crea una matriz (filas x columnas) rellena con "valor" (0 por defecto).
+function crearGrillaVacia(filas, columnas, valor){
+  if(valor === undefined) valor = 0;
+  var grilla = [];
+  for(var r=0; r<filas; r++){
+    var fila = [];
+    for(var c=0; c<columnas; c++) fila.push(valor);
+    grilla.push(fila);
+  }
+  return grilla;
+}
+
+// Crea las celdas (elementos <div>) de una grilla dentro de un contenedor,
+// configura el tamaño de celda vía variables CSS y devuelve una matriz de
+// referencias a los elementos para poder actualizarlos sin recrearlos.
+function crearElementosGrilla(contenedor, filas, columnas, tamanoCelda){
+  contenedor.innerHTML = '';
+  contenedor.style.setProperty('--cols', columnas);
+  contenedor.style.setProperty('--cell-size', tamanoCelda + 'px');
+  var celdas = [];
+  for(var r=0; r<filas; r++){
+    var filaCeldas = [];
+    for(var c=0; c<columnas; c++){
+      var div = document.createElement('div');
+      div.className = 'cell';
+      div.dataset.r = r;
+      div.dataset.c = c;
+      contenedor.appendChild(div);
+      filaCeldas.push(div);
+    }
+    celdas.push(filaCeldas);
+  }
+  return celdas;
+}
+
+// Dado un centro (fila,col), devuelve las 8 posiciones vecinas (vecindad de
+// Moore), indicando para cada una si queda fuera de la grilla y si "envuelve"
+// (viene del lado opuesto por el modo toroidal).
+//   - Si toroidal = true  -> los bordes están conectados, nunca queda "fuera de rango".
+//   - Si toroidal = false -> lo que cae fuera de la grilla no existe (vale 0).
+function obtenerVecinos(fila, col, filas, columnas, toroidal){
+  var deltas = [
+    [-1,-1], [-1,0], [-1,1],
+    [ 0,-1],         [ 0,1],
+    [ 1,-1], [ 1,0], [ 1,1]
+  ];
+  var resultado = [];
+  for(var i=0; i<deltas.length; i++){
+    var dr = deltas[i][0], dc = deltas[i][1];
+    var rawR = fila + dr, rawC = col + dc;
+    var fuera = (rawR < 0 || rawR >= filas || rawC < 0 || rawC >= columnas);
+
+    if(fuera && !toroidal){
+      // Fuera de la grilla y sin conexión toroidal: no existe, no cuenta.
+      resultado.push({ r:null, c:null, fueraDeRango:true, envuelto:false });
+    } else {
+      // Si toroidal, "envolvemos" el índice con módulo para conectar los bordes.
+      var r = ((rawR % filas) + filas) % filas;
+      var c = ((rawC % columnas) + columnas) % columnas;
+      resultado.push({ r:r, c:c, fueraDeRango:false, envuelto: fuera });
+    }
+  }
+  return resultado;
+}
+
+// Cuenta cuántos de los 8 vecinos de (fila,col) están vivos (valor === 1),
+// usando el mismo criterio de bordes que "obtenerVecinos".
+// Esta es, en esencia, la aplicación del kernel de convolución 3x3
+// (centro en 0, resto en 1) que se muestra visualmente en la pestaña 2.
+function contarVecinosVivos(grilla, fila, col, filas, columnas, toroidal){
+  var vecinos = obtenerVecinos(fila, col, filas, columnas, toroidal);
+  var cuenta = 0;
+  for(var i=0; i<vecinos.length; i++){
+    var v = vecinos[i];
+    if(!v.fueraDeRango && grilla[v.r][v.c] === 1) cuenta++;
+  }
+  return cuenta;
+}
+
+// Cambia de pestaña activa (nav + panel) y pausa cualquier animación en curso
+// para que no queden simulaciones corriendo "invisibles" en otra pestaña.
+function inicializarNavegacionTabs(){
+  var botones = document.querySelectorAll('.tab-btn');
+  var paneles = document.querySelectorAll('.tab-panel');
+  botones.forEach(function(boton){
+    boton.addEventListener('click', function(){
+      pausarTab1();
+      pausarTab2();
+      pausarTab3();
+      botones.forEach(function(b){ b.classList.remove('active'); });
+      paneles.forEach(function(p){ p.classList.remove('active'); });
+      boton.classList.add('active');
+      document.getElementById('panel-' + boton.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+
+/* ============================================================================
+   1. TAB 1 — AUTÓMATA CELULAR GENÉRICO (regla de "mayoría")
+   ============================================================================ */
+(function(){
+
+  var FILAS = 10, COLUMNAS = 10, TAMANO_CELDA = 34;
+
+  var gridActual = crearGrillaVacia(FILAS, COLUMNAS);
+  var gridSiguiente = crearGrillaVacia(FILAS, COLUMNAS);
+  var celdasActual, celdasSiguiente;
+  var generacion = 0;
+  var jugando = false;
+  var intervalId = null;
+  var pendienteAvance = false; // true = ya se calculó "siguiente" y falta confirmar el avance
+
+  // Regla de mayoría: se cuenta la celda + sus 8 vecinas (9 en total).
+  // Si 5 o más están vivas, la celda vive en la próxima generación.
+  function siguienteEstadoMayoria(valorActual, vecinosVivos){
+    var totalVivas = valorActual + vecinosVivos; // entre 0 y 9
+    return totalVivas >= 5 ? 1 : 0;
+  }
+
+  function renderCeldaActual(r, c){
+    celdasActual[r][c].classList.toggle('alive', gridActual[r][c] === 1);
+  }
+
+  function renderCeldaSiguiente(r, c){
+    celdasSiguiente[r][c].classList.toggle('next-alive', gridSiguiente[r][c] === 1);
+  }
+
+  function renderTodoActual(){
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) renderCeldaActual(r,c);
+  }
+  function renderTodoSiguiente(){
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) renderCeldaSiguiente(r,c);
+  }
+
+  function actualizarEtiquetaGeneracion(){
+    document.getElementById('gen-actual-num').textContent = 'Gen. ' + generacion;
+  }
+
+  // Calcula la generación siguiente A PARTIR de la actual, sin modificarla
+  // todavía (así se ve claramente que son dos grillas distintas).
+  function calcularSiguiente(){
+    for(var r=0; r<FILAS; r++){
+      for(var c=0; c<COLUMNAS; c++){
+        var vecinos = contarVecinosVivos(gridActual, r, c, FILAS, COLUMNAS, false);
+        gridSiguiente[r][c] = siguienteEstadoMayoria(gridActual[r][c], vecinos);
+      }
+    }
+    renderTodoSiguiente();
+    pendienteAvance = true;
+    document.getElementById('btn-calc-next').disabled = true;
+    document.getElementById('btn-advance').disabled = false;
+  }
+
+  // "Confirma" el paso: la generación siguiente pasa a ser la actual.
+  function avanzarGeneracion(){
+    if(!pendienteAvance) return;
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) gridActual[r][c] = gridSiguiente[r][c];
+    renderTodoActual();
+    // Limpiar visualmente el panel de "siguiente" hasta el próximo cálculo.
+    for(var r2=0;r2<FILAS;r2++) for(var c2=0;c2<COLUMNAS;c2++) gridSiguiente[r2][c2] = 0;
+    renderTodoSiguiente();
+    generacion++;
+    actualizarEtiquetaGeneracion();
+    pendienteAvance = false;
+    document.getElementById('btn-calc-next').disabled = false;
+    document.getElementById('btn-advance').disabled = true;
+  }
+
+  function pasoAutomatico(){
+    // Alterna: primero muestra el cálculo, en el siguiente tick lo confirma.
+    if(!pendienteAvance) calcularSiguiente();
+    else avanzarGeneracion();
+  }
+
+  function pausarTab1(){
+    if(intervalId){ clearInterval(intervalId); intervalId = null; }
+    jugando = false;
+    document.getElementById('btn-play-auto').textContent = 'Reproducir ⏵';
+  }
+
+  function alternarPlay(){
+    if(jugando){ pausarTab1(); return; }
+    jugando = true;
+    document.getElementById('btn-play-auto').textContent = 'Pausa ⏸';
+    var velocidad = parseInt(document.getElementById('speed-auto').value, 10);
+    intervalId = setInterval(pasoAutomatico, velocidad);
+  }
+
+  function aleatorizar(){
+    pausarTab1();
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) gridActual[r][c] = Math.random() < 0.35 ? 1 : 0;
+    for(var r2=0;r2<FILAS;r2++) for(var c2=0;c2<COLUMNAS;c2++) gridSiguiente[r2][c2] = 0;
+    generacion = 0;
+    pendienteAvance = false;
+    renderTodoActual(); renderTodoSiguiente(); actualizarEtiquetaGeneracion();
+    document.getElementById('btn-calc-next').disabled = false;
+    document.getElementById('btn-advance').disabled = true;
+  }
+
+  function limpiar(){
+    pausarTab1();
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++){ gridActual[r][c]=0; gridSiguiente[r][c]=0; }
+    generacion = 0;
+    pendienteAvance = false;
+    renderTodoActual(); renderTodoSiguiente(); actualizarEtiquetaGeneracion();
+    document.getElementById('btn-calc-next').disabled = false;
+    document.getElementById('btn-advance').disabled = true;
+  }
+
+  function iniciar(){
+    var contenedorActual = document.getElementById('grid-actual');
+    var contenedorSiguiente = document.getElementById('grid-siguiente');
+    celdasActual = crearElementosGrilla(contenedorActual, FILAS, COLUMNAS, TAMANO_CELDA);
+    celdasSiguiente = crearElementosGrilla(contenedorSiguiente, FILAS, COLUMNAS, TAMANO_CELDA);
+
+    // Click para dibujar el patrón inicial en la grilla "actual".
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        (function(r,c){
+          celdasActual[r][c].addEventListener('click', function(){
+            if(jugando) return; // no editar mientras corre solo
+            gridActual[r][c] = gridActual[r][c] === 1 ? 0 : 1;
+            renderCeldaActual(r,c);
+            // Si había un cálculo pendiente, queda desactualizado: lo reseteamos.
+            if(pendienteAvance){
+              for(var rr=0;rr<FILAS;rr++) for(var cc=0;cc<COLUMNAS;cc++) gridSiguiente[rr][cc]=0;
+              renderTodoSiguiente();
+              pendienteAvance = false;
+              document.getElementById('btn-calc-next').disabled = false;
+              document.getElementById('btn-advance').disabled = true;
+            }
+          });
+        })(r,c);
+      }
+    }
+
+    document.getElementById('btn-calc-next').addEventListener('click', calcularSiguiente);
+    document.getElementById('btn-advance').addEventListener('click', avanzarGeneracion);
+    document.getElementById('btn-play-auto').addEventListener('click', alternarPlay);
+    document.getElementById('btn-random-auto').addEventListener('click', aleatorizar);
+    document.getElementById('btn-clear-auto').addEventListener('click', limpiar);
+    document.getElementById('speed-auto').addEventListener('input', function(){
+      if(jugando){ pausarTab1(); alternarPlay(); } // reinicia el intervalo con la nueva velocidad
+    });
+
+    actualizarEtiquetaGeneracion();
+  }
+
+  // Se exponen sólo las funciones que necesita el resto del script (navegación de tabs).
+  window.pausarTab1 = pausarTab1;
+  window.iniciarTab1 = iniciar;
+})();
+
+
+/* ============================================================================
+   2. TAB 2 — CONVOLUCIÓN CON KERNEL 3x3 (centro en 0)
+   ============================================================================ */
+(function(){
+
+  var FILAS = 9, COLUMNAS = 9, TAMANO_CELDA = 40;
+
+  var gridConv = crearGrillaVacia(FILAS, COLUMNAS);
+  var resultado = crearGrillaVacia(FILAS, COLUMNAS, null); // null = celda todavía no visitada
+  var celdasConv, celdasResultado;
+  var pos = { r:0, c:0 };       // posición actual del centro del kernel
+  var toroidal = false;
+  var jugando = false;
+  var intervalId = null;
+  var cuentaActual = 0; // vecinos vivos en la posición actual (para no recalcular al confirmar el paso)
+
+  function renderCeldaEntrada(r,c){
+    celdasConv[r][c].classList.toggle('alive', gridConv[r][c] === 1);
+  }
+  function renderTodoEntrada(){
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) renderCeldaEntrada(r,c);
+  }
+
+  function renderCeldaResultado(r,c,valor){
+    var el = celdasResultado[r][c];
+    if(valor === null){
+      el.textContent = '';
+      el.style.background = '';
+    } else {
+      el.textContent = valor;
+      var intensidad = valor / 8; // 0..1 según cantidad de vecinos vivos
+      el.style.background = 'rgba(88,166,255,' + (0.12 + intensidad*0.75).toFixed(2) + ')';
+    }
+  }
+  function renderTodoResultado(){
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) renderCeldaResultado(r,c,resultado[r][c]);
+  }
+
+  // Vuelve a dibujar el resaltado del kernel en la posición actual: limpia
+  // el resaltado anterior, marca el centro y los 8 vecinos, y actualiza el
+  // contador en pantalla en tiempo real.
+  function renderResaltadoKernel(){
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        celdasConv[r][c].classList.remove('kernel-center','kernel-neighbor','kernel-neighbor-wrapped');
+      }
+    }
+    celdasConv[pos.r][pos.c].classList.add('kernel-center');
+
+    var vecinos = obtenerVecinos(pos.r, pos.c, FILAS, COLUMNAS, toroidal);
+    var cuenta = 0;
+    for(var i=0;i<vecinos.length;i++){
+      var v = vecinos[i];
+      if(v.fueraDeRango) continue; // sin toroidal, lo que cae afuera no existe ni se resalta
+      var el = celdasConv[v.r][v.c];
+      el.classList.add('kernel-neighbor');
+      if(v.envuelto) el.classList.add('kernel-neighbor-wrapped');
+      if(gridConv[v.r][v.c] === 1) cuenta++;
+    }
+    cuentaActual = cuenta;
+    document.getElementById('conv-counter').textContent = cuenta;
+    document.getElementById('conv-pos-label').textContent = '(fila ' + (pos.r+1) + ', col ' + (pos.c+1) + ')';
+  }
+
+  // Guarda el conteo actual en el "mapa de resultados" (esto es literalmente
+  // el resultado de aplicar el kernel en esa posición) y mueve el kernel a
+  // la siguiente celda en orden de lectura (izquierda→derecha, arriba→abajo).
+  function pasoConvolucion(){
+    resultado[pos.r][pos.c] = cuentaActual;
+    renderCeldaResultado(pos.r, pos.c, cuentaActual);
+
+    pos.c++;
+    if(pos.c >= COLUMNAS){
+      pos.c = 0;
+      pos.r++;
+      if(pos.r >= FILAS){
+        // Se completó un recorrido: se reinicia para poder verlo de nuevo.
+        pos.r = 0;
+        resultado = crearGrillaVacia(FILAS, COLUMNAS, null);
+        renderTodoResultado();
+      }
+    }
+    renderResaltadoKernel();
+  }
+
+  function reiniciarRecorrido(){
+    pos = { r:0, c:0 };
+    resultado = crearGrillaVacia(FILAS, COLUMNAS, null);
+    renderTodoResultado();
+    renderResaltadoKernel();
+  }
+
+  function pausarTab2(){
+    if(intervalId){ clearInterval(intervalId); intervalId = null; }
+    jugando = false;
+    document.getElementById('btn-conv-play').textContent = 'Reproducir ⏵';
+  }
+
+  function alternarPlay(){
+    if(jugando){ pausarTab2(); return; }
+    jugando = true;
+    document.getElementById('btn-conv-play').textContent = 'Pausa ⏸';
+    var velocidad = parseInt(document.getElementById('speed-conv').value, 10);
+    intervalId = setInterval(pasoConvolucion, velocidad);
+  }
+
+  function alternarToroidal(){
+    toroidal = !toroidal;
+    var boton = document.getElementById('btn-toggle-toroidal');
+    var hint = document.getElementById('conv-border-hint');
+    if(toroidal){
+      boton.textContent = 'Modo: Toroidal (bordes conectados)';
+      hint.textContent = 'Los bordes están conectados: los vecinos "por afuera" aparecen del lado opuesto (marcados con línea punteada).';
+    } else {
+      boton.textContent = 'Modo: Normal (bordes vacíos)';
+      hint.textContent = 'Las celdas fuera de la grilla valen 0 y no se cuentan. Probá esto en una esquina y compará con el modo toroidal.';
+    }
+    renderResaltadoKernel(); // refleja el cambio inmediatamente en la posición actual
+  }
+
+  function aleatorizar(){
+    pausarTab2();
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) gridConv[r][c] = Math.random() < 0.4 ? 1 : 0;
+    renderTodoEntrada();
+    reiniciarRecorrido();
+  }
+
+  function limpiar(){
+    pausarTab2();
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) gridConv[r][c] = 0;
+    renderTodoEntrada();
+    reiniciarRecorrido();
+  }
+
+  function iniciar(){
+    var contenedorConv = document.getElementById('grid-conv');
+    var contenedorResultado = document.getElementById('grid-resultado');
+    celdasConv = crearElementosGrilla(contenedorConv, FILAS, COLUMNAS, TAMANO_CELDA);
+    celdasResultado = crearElementosGrilla(contenedorResultado, FILAS, COLUMNAS, TAMANO_CELDA);
+    celdasResultado.forEach(function(fila){ fila.forEach(function(el){ el.classList.add('result-cell'); }); });
+
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        (function(r,c){
+          celdasConv[r][c].addEventListener('click', function(){
+            gridConv[r][c] = gridConv[r][c] === 1 ? 0 : 1;
+            renderCeldaEntrada(r,c);
+            renderResaltadoKernel(); // el conteo en pantalla se actualiza al instante
+          });
+        })(r,c);
+      }
+    }
+
+    document.getElementById('btn-conv-step').addEventListener('click', pasoConvolucion);
+    document.getElementById('btn-conv-play').addEventListener('click', alternarPlay);
+    document.getElementById('btn-conv-reset').addEventListener('click', reiniciarRecorrido);
+    document.getElementById('btn-conv-random').addEventListener('click', aleatorizar);
+    document.getElementById('btn-conv-clear').addEventListener('click', limpiar);
+    document.getElementById('btn-toggle-toroidal').addEventListener('click', alternarToroidal);
+    document.getElementById('speed-conv').addEventListener('input', function(){
+      if(jugando){ pausarTab2(); alternarPlay(); }
+    });
+
+    renderResaltadoKernel(); // muestra el resaltado inicial en (0,0)
+  }
+
+  window.pausarTab2 = pausarTab2;
+  window.iniciarTab2 = iniciar;
+})();
+
+
+/* ============================================================================
+   3. TAB 3 — JUEGO DE LA VIDA DE CONWAY
+   ============================================================================ */
+(function(){
+
+  var FILAS = 20, COLUMNAS = 32, TAMANO_CELDA = 20;
+
+  // Patrones clásicos, definidos como offsets [fila,columna] relativos a un
+  // punto de referencia (esquina donde se hace click).
+  var PATRONES = {
+    glider:  [[0,1],[1,2],[2,0],[2,1],[2,2]],
+    blinker: [[0,0],[0,1],[0,2]],
+    toad:    [[0,1],[0,2],[0,3],[1,0],[1,1],[1,2]],
+    beacon:  [[0,0],[0,1],[1,0],[1,1],[2,2],[2,3],[3,2],[3,3]]
+  };
+
+  var gridVida = crearGrillaVacia(FILAS, COLUMNAS);
+  var celdasVida;
+  var toroidal = true;
+  var jugando = false;
+  var intervalId = null;
+  var generacion = 0;
+  var modoPatron = 'draw';
+  var dibujando = false;
+  var valorPincel = 1;
+
+  // Las 3 reglas clásicas de Conway (B3/S23):
+  //  - Nace:      celda muerta con exactamente 3 vecinas vivas.
+  //  - Sobrevive: celda viva con 2 o 3 vecinas vivas.
+  //  - Muere:     en cualquier otro caso.
+  function reglaVida(actual, vecinosVivos){
+    if(actual === 1) return (vecinosVivos === 2 || vecinosVivos === 3) ? 1 : 0;
+    return (vecinosVivos === 3) ? 1 : 0;
+  }
+
+  function renderTodoVida(){
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        celdasVida[r][c].classList.toggle('alive', gridVida[r][c] === 1);
+      }
+    }
+    actualizarStats();
+  }
+
+  function actualizarStats(){
+    var poblacion = 0;
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) if(gridVida[r][c] === 1) poblacion++;
+    document.getElementById('vida-gen').textContent = generacion;
+    document.getElementById('vida-pop').textContent = poblacion;
+  }
+
+  function pasoVida(){
+    var nuevo = crearGrillaVacia(FILAS, COLUMNAS);
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        var vecinos = contarVecinosVivos(gridVida, r, c, FILAS, COLUMNAS, toroidal);
+        nuevo[r][c] = reglaVida(gridVida[r][c], vecinos);
+      }
+    }
+    gridVida = nuevo;
+    generacion++;
+    renderTodoVida();
+  }
+
+  function pausarTab3(){
+    if(intervalId){ clearInterval(intervalId); intervalId = null; }
+    jugando = false;
+    document.getElementById('btn-vida-play').textContent = 'Reproducir ⏵';
+  }
+
+  function alternarPlay(){
+    if(jugando){ pausarTab3(); return; }
+    jugando = true;
+    document.getElementById('btn-vida-play').textContent = 'Pausa ⏸';
+    var velocidad = parseInt(document.getElementById('speed-vida').value, 10);
+    intervalId = setInterval(pasoVida, velocidad);
+  }
+
+  function aleatorizar(){
+    pausarTab3();
+    for(var r=0;r<FILAS;r++) for(var c=0;c<COLUMNAS;c++) gridVida[r][c] = Math.random() < 0.22 ? 1 : 0;
+    generacion = 0;
+    renderTodoVida();
+  }
+
+  function limpiar(){
+    pausarTab3();
+    gridVida = crearGrillaVacia(FILAS, COLUMNAS);
+    generacion = 0;
+    renderTodoVida();
+  }
+
+  // Inserta un patrón (glider, blinker, etc.) con su esquina en (r,c).
+  // Se usa módulo para que, si el patrón "se pasa" del borde, aparezca
+  // envuelto del otro lado (coherente con el modo toroidal).
+  function colocarPatron(nombre, r, c){
+    var offsets = PATRONES[nombre];
+    if(!offsets) return;
+    for(var i=0;i<offsets.length;i++){
+      var rr = ((r + offsets[i][0]) % FILAS + FILAS) % FILAS;
+      var cc = ((c + offsets[i][1]) % COLUMNAS + COLUMNAS) % COLUMNAS;
+      gridVida[rr][cc] = 1;
+    }
+    renderTodoVida();
+  }
+
+  function iniciar(){
+    var contenedor = document.getElementById('grid-vida');
+    celdasVida = crearElementosGrilla(contenedor, FILAS, COLUMNAS, TAMANO_CELDA);
+
+    for(var r=0;r<FILAS;r++){
+      for(var c=0;c<COLUMNAS;c++){
+        (function(r,c){
+          celdasVida[r][c].addEventListener('mousedown', function(e){
+            e.preventDefault();
+            if(modoPatron === 'draw'){
+              dibujando = true;
+              valorPincel = gridVida[r][c] === 1 ? 0 : 1;
+              gridVida[r][c] = valorPincel;
+              celdasVida[r][c].classList.toggle('alive', valorPincel === 1);
+              actualizarStats();
+            } else {
+              colocarPatron(modoPatron, r, c);
+            }
+          });
+          celdasVida[r][c].addEventListener('mouseenter', function(){
+            if(dibujando && modoPatron === 'draw'){
+              gridVida[r][c] = valorPincel;
+              celdasVida[r][c].classList.toggle('alive', valorPincel === 1);
+              actualizarStats();
+            }
+          });
+        })(r,c);
+      }
+    }
+    // Soltar el mouse en cualquier parte de la página termina el dibujo libre.
+    document.addEventListener('mouseup', function(){ dibujando = false; });
+
+    // Botones de selección de patrón (incluye "Dibujo libre").
+    var botonesPatron = document.querySelectorAll('.pattern-btn');
+    botonesPatron.forEach(function(boton){
+      boton.addEventListener('click', function(){
+        botonesPatron.forEach(function(b){ b.classList.remove('active'); });
+        boton.classList.add('active');
+        modoPatron = boton.dataset.pattern;
+      });
+    });
+
+    document.getElementById('chk-toroidal-vida').addEventListener('change', function(e){
+      toroidal = e.target.checked;
+    });
+
+    document.getElementById('btn-vida-play').addEventListener('click', alternarPlay);
+    document.getElementById('btn-vida-step').addEventListener('click', function(){ pausarTab3(); pasoVida(); });
+    document.getElementById('btn-vida-random').addEventListener('click', aleatorizar);
+    document.getElementById('btn-vida-clear').addEventListener('click', limpiar);
+    document.getElementById('speed-vida').addEventListener('input', function(){
+      if(jugando){ pausarTab3(); alternarPlay(); }
+    });
+
+    actualizarStats();
+  }
+
+  window.pausarTab3 = pausarTab3;
+  window.iniciarTab3 = iniciar;
+})();
+
+
+/* ----------------------------------------------------------------------------
+   ARRANQUE GENERAL
+   ---------------------------------------------------------------------------- */
+document.addEventListener('DOMContentLoaded', function(){
+  inicializarNavegacionTabs();
+  iniciarTab1();
+  iniciarTab2();
+  iniciarTab3();
+});
+</script>
+</body>
+</html>
